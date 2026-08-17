@@ -1,0 +1,208 @@
+{% extends "base.html" %}
+{% block title %}AI解析結果を応募先へ反映 | CareerPilot AI{% endblock %}
+{% block content %}
+{% macro field_errors(field) %}
+  {% for error in field.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+{% endmacro %}
+
+<div class="ai-application-apply">
+  <div class="mb-4">
+    <a class="text-decoration-none small" href="{{ cancel_url }}">← メール詳細へ戻る</a>
+    <p class="eyebrow mt-3 mb-1">AI REVIEW</p>
+    <h1 class="h2 fw-bold mb-2">AI解析結果を応募先へ反映</h1>
+    <p class="text-muted mb-0">AIが抽出した候補です。元メールを確認し、必要に応じて修正してください。</p>
+  </div>
+
+  <div class="alert alert-info" role="note">
+    この画面を保存するまで応募先情報は変更されません。AI候補を直接信用せず、最終値を確認してください。
+  </div>
+
+  <section class="card mb-4" aria-labelledby="existingApplicationHeading">
+    <div class="card-body p-4">
+      <h2 class="h5 fw-bold" id="existingApplicationHeading">既存の応募先を使う場合</h2>
+      <p class="small text-muted">反映先を選び、「現在値を読み込む」を押してください。読み込んだ現在値を編集欄へ設定し、AI候補と比較できます。</p>
+      {% if application_choices|length > 1 %}
+        <form method="get" action="{{ url_for('emails.apply_analysis', message_id=message_id) }}" class="row g-2 align-items-end">
+          <input type="hidden" name="token" value="{{ form.token.data }}">
+          <input type="hidden" name="return_to" value="{{ return_to }}">
+          <div class="col-lg-9">
+            <label class="form-label" for="existing-application-select">応募先</label>
+            <select class="form-select" id="existing-application-select" name="application_id" required>
+              {% for application_id, label in application_choices %}
+                <option value="{{ application_id }}"{% if selected_application and selected_application.id == application_id %} selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-lg-3 d-grid">
+            <button class="btn btn-outline-primary" type="submit">現在値を読み込む</button>
+          </div>
+        </form>
+      {% else %}
+        <p class="text-muted mb-0">登録済みの応募先はありません。</p>
+      {% endif %}
+    </div>
+  </section>
+
+  {% if selected_application %}
+    <section class="card mb-4 current-application-card" aria-labelledby="currentApplicationHeading">
+      <div class="card-body p-4">
+        <h2 class="h5 fw-bold" id="currentApplicationHeading">現在の応募先情報</h2>
+        <dl class="detail-grid mb-0">
+          <div><dt>会社名</dt><dd>{{ selected_application.company_name }}</dd></div>
+          <div><dt>職種</dt><dd>{{ selected_application.position_name or "未設定" }}</dd></div>
+          <div><dt>ステータス</dt><dd>{{ selected_application.status }}</dd></div>
+          <div><dt>志望度</dt><dd>{{ selected_application.priority }}</dd></div>
+          <div><dt>ES締切</dt><dd>{{ selected_application.es_deadline.strftime("%Y/%m/%d %H:%M") if selected_application.es_deadline else "未設定" }}</dd></div>
+          <div><dt>Webテスト期限</dt><dd>{{ selected_application.web_test_deadline.strftime("%Y/%m/%d %H:%M") if selected_application.web_test_deadline else "未設定" }}</dd></div>
+          <div><dt>面接日時</dt><dd>{{ selected_application.interview_at.strftime("%Y/%m/%d %H:%M") if selected_application.interview_at else "未設定" }}</dd></div>
+        </dl>
+      </div>
+    </section>
+  {% endif %}
+
+  <form method="post" novalidate data-loading-text="反映中…">
+    {{ form.csrf_token }}
+    {{ form.token }}
+    {{ form.return_to }}
+    <div class="visually-hidden" aria-hidden="true">{{ form.application_id }}</div>
+
+    <section class="card mb-4">
+      <div class="card-body p-4">
+        <h2 class="form-section-title">反映方法</h2>
+        {% for subfield in form.apply_mode %}
+          <div class="form-check mb-2">
+            {{ subfield(class="form-check-input") }}
+            {{ subfield.label(class="form-check-label fw-semibold") }}
+          </div>
+        {% endfor %}
+        {{ field_errors(form.apply_mode) }}
+        {{ field_errors(form.application_id) }}
+        {% if not selected_application %}
+          <p class="form-text mb-0">既存へ反映する場合は、先に上の選択欄から現在値を読み込んでください。</p>
+        {% endif %}
+      </div>
+    </section>
+
+    <div class="row g-4">
+      <div class="col-xl-8">
+        <section class="card mb-4">
+          <div class="card-body p-4">
+            <h2 class="form-section-title">確認・編集する応募先情報</h2>
+            <div class="row g-3">
+              <div class="col-md-7">
+                {{ form.company_name.label(class="form-label required") }}
+                {{ form.company_name(class="form-control" + (" is-invalid" if form.company_name.errors else "")) }}
+                {{ field_errors(form.company_name) }}
+                <div class="ai-candidate-hint">AI候補：{{ ai_result.company_name or "なし" }}</div>
+              </div>
+              <div class="col-md-5">
+                {{ form.position_name.label(class="form-label") }}
+                {{ form.position_name(class="form-control" + (" is-invalid" if form.position_name.errors else ""), placeholder="例：総合職") }}
+                {{ field_errors(form.position_name) }}
+                <div class="ai-candidate-hint">AI候補：なし（ユーザー入力）</div>
+              </div>
+              <div class="col-md-7">
+                {{ form.status.label(class="form-label required") }}
+                {{ form.status(class="form-select" + (" is-invalid" if form.status.errors else "")) }}
+                {{ field_errors(form.status) }}
+                <div class="form-text">AIからは推測せず、ユーザーが選択した値を保存します。</div>
+              </div>
+              <div class="col-md-5">
+                {{ form.priority.label(class="form-label required") }}
+                {{ form.priority(class="form-control" + (" is-invalid" if form.priority.errors else ""), min="1", max="5") }}
+                {{ field_errors(form.priority) }}
+                <div class="form-text">1（低い）〜5（高い）</div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="card mb-4">
+          <div class="card-body p-4">
+            <h2 class="form-section-title">締切・面接予定</h2>
+            <div class="row g-3">
+              <div class="col-md-6">
+                {{ form.es_deadline.label(class="form-label") }}
+                {{ form.es_deadline(class="form-control" + (" is-invalid" if form.es_deadline.errors else "")) }}
+                {{ field_errors(form.es_deadline) }}
+                <div class="ai-candidate-hint">AI候補：{{ ai_datetime_reference(ai_result, "es_deadline") }}</div>
+                {% if ai_result.es_deadline_text %}<div class="form-text">AIが検出した原文：{{ ai_result.es_deadline_text }}</div>{% endif %}
+              </div>
+              <div class="col-md-6">
+                {{ form.web_test_deadline.label(class="form-label") }}
+                {{ form.web_test_deadline(class="form-control" + (" is-invalid" if form.web_test_deadline.errors else "")) }}
+                {{ field_errors(form.web_test_deadline) }}
+                <div class="ai-candidate-hint">AI候補：{{ ai_datetime_reference(ai_result, "web_test_deadline") }}</div>
+                {% if ai_result.web_test_deadline_text %}<div class="form-text">AIが検出した原文：{{ ai_result.web_test_deadline_text }}</div>{% endif %}
+              </div>
+              <div class="col-md-6">
+                {{ form.interview_at.label(class="form-label") }}
+                {{ form.interview_at(class="form-control" + (" is-invalid" if form.interview_at.errors else "")) }}
+                {{ field_errors(form.interview_at) }}
+                <div class="ai-candidate-hint">AI候補：{{ ai_datetime_reference(ai_result, "interview_datetime") }}</div>
+                {% if ai_result.interview_datetime_text %}<div class="form-text">AIが検出した原文：{{ ai_result.interview_datetime_text }}</div>{% endif %}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="card mb-4">
+          <div class="card-body p-4">
+            <h2 class="form-section-title">メモ</h2>
+            {{ form.memo(class="form-control" + (" is-invalid" if form.memo.errors else ""), rows="7") }}
+            {{ field_errors(form.memo) }}
+            <div class="form-text">AIの要約と重要事項を候補にしています。自由に修正できます。</div>
+          </div>
+        </section>
+
+        <section class="card mb-4">
+          <div class="card-body p-4">
+            <div class="form-check">
+              {{ form.create_default_checklist(class="form-check-input") }}
+              {{ form.create_default_checklist.label(class="form-check-label fw-semibold") }}
+            </div>
+            <div class="form-text ms-4">新規登録時だけ使用します。既存応募先のChecklistは変更しません。</div>
+          </div>
+        </section>
+      </div>
+
+      <aside class="col-xl-4">
+        <section class="card ai-reference-card mb-4" aria-labelledby="aiReferenceHeading">
+          <div class="card-body p-4">
+            <h2 class="h5 fw-bold" id="aiReferenceHeading">AI参考情報</h2>
+            <dl>
+              <div><dt>メール種別</dt><dd>{{ ai_result.mail_category_label }}</dd></div>
+              <div><dt>信頼度</dt><dd>{{ ai_result.confidence_label }}</dd></div>
+              <div><dt>イベント日時</dt><dd>{{ ai_datetime_reference(ai_result, "event_datetime") }}</dd></div>
+            </dl>
+
+            <h3 class="h6 fw-bold mt-4">必要な対応</h3>
+            {% if ai_result.action_items %}
+              <ul class="ps-3">{% for item in ai_result.action_items %}<li>{{ item }}</li>{% endfor %}</ul>
+            {% else %}<p class="text-muted">なし</p>{% endif %}
+
+            <h3 class="h6 fw-bold mt-4">重要事項</h3>
+            {% if ai_result.important_notes %}
+              <ul class="ps-3">{% for item in ai_result.important_notes %}<li>{{ item }}</li>{% endfor %}</ul>
+            {% else %}<p class="text-muted">なし</p>{% endif %}
+
+            <h3 class="h6 fw-bold mt-4">根拠</h3>
+            {% if ai_result.evidence_items %}
+              <dl class="ai-evidence-list mb-0">
+                {% for label, evidence in ai_result.evidence_items %}
+                  <div><dt>{{ label }}</dt><dd>{{ evidence }}</dd></div>
+                {% endfor %}
+              </dl>
+            {% else %}<p class="text-muted mb-0">なし</p>{% endif %}
+          </div>
+        </section>
+      </aside>
+    </div>
+
+    <div class="d-flex flex-column-reverse flex-sm-row justify-content-end gap-2">
+      <a class="btn btn-outline-secondary" href="{{ cancel_url }}">キャンセル</a>
+      {{ form.submit(class="btn btn-primary px-4") }}
+    </div>
+  </form>
+</div>
+{% endblock %}

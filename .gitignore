@@ -1,0 +1,65 @@
+# Environment and secrets
+.env
+.env.*
+!.env.example
+.flaskenv
+.venv/
+venv/
+client_secret*.json
+credentials*.json
+token*.json
+service-account*.json
+*.pem
+*.key
+*.p12
+*.pfx
+
+# SQLite
+*.db
+*.sqlite
+*.sqlite3
+*.db-*
+*.sqlite-*
+*.sqlite3-*
+instance/
+
+# Python caches and test artifacts
+__pycache__/
+*.py[cod]
+.cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.nox/
+.pytest_cache/
+.pytest_tmp/
+pytestdebug.log
+.coverage
+.coverage.*
+htmlcov/
+
+# Logs, backups, and local build artifacts
+*.log
+logs/
+*.bak
+*.backup
+*.old
+*.tmp
+*.temp
+tmp/
+build/
+dist/
+*.egg-info/
+
+# Uploads
+uploads/
+app/static/uploads/
+
+# Editors and OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+.pytest_sandbox_tmp*/
+.pytest_tmp*/

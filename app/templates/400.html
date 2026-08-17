@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}リクエストを確認できません | CareerPilot AI{% endblock %}
+{% block content %}
+<div class="error-page">
+  <div class="error-code">400</div>
+  <h1 class="h3 fw-bold">リクエストを確認できませんでした</h1>
+  {% if csrf_failed %}
+    <p class="text-muted">画面の有効期限が切れた可能性があります。元の画面を再読み込みして、もう一度お試しください。</p>
+  {% else %}
+    <p class="text-muted">入力内容または操作手順を確認して、もう一度お試しください。</p>
+  {% endif %}
+  <div class="d-flex flex-column flex-sm-row gap-2">
+    <a class="btn btn-outline-secondary" href="{{ url_for('main.dashboard') }}">ダッシュボードへ戻る</a>
+    <a class="btn btn-primary" href="{{ url_for('applications.index') }}">応募先一覧を開く</a>
+  </div>
+</div>
+{% endblock %}

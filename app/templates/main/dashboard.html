@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+{% block title %}ダッシュボード | CareerPilot AI{% endblock %}
+{% block content %}
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-md-end mb-4 gap-3">
+  <div>
+    <p class="eyebrow mb-1">OVERVIEW</p>
+    <h1 class="display-6 fw-bold mb-1">就活ダッシュボード</h1>
+    <p class="text-muted mb-0">締切と選考予定を整理して、次の一歩を明確に。</p>
+  </div>
+  <div class="dashboard-actions">
+    <a class="btn btn-outline-primary" href="{{ url_for('emails.index') }}">就活メールを確認</a>
+    <a class="btn btn-primary" href="{{ url_for('applications.create') }}">応募先を登録する</a>
+  </div>
+</div>
+
+<div class="row row-cols-2 row-cols-md-3 row-cols-xl-6 g-3 mb-4">
+  {% for label, value, tone, key in [
+    ("登録企業", stats.total, "primary", "total"),
+    ("ES未提出", stats.es_pending, "warning", "es-pending"),
+    ("選考中", stats.in_progress, "info", "in-progress"),
+    ("面接予定", stats.interviews, "purple", "interviews"),
+    ("内定", stats.offers, "success", "offers"),
+    ("未完了タスク", stats.incomplete_tasks, "danger", "incomplete-tasks")
+  ] %}
+  <div class="col">
+    <div class="card stat-card h-100">
+      <div class="card-body">
+        <span class="stat-dot bg-{{ tone }}"></span>
+        <div class="text-muted small mt-3">{{ label }}</div>
+        <div class="stat-number" data-stat="{{ key }}">{{ value }}</div>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+<div class="row g-4">
+  <div class="col-lg-7">
+    <section class="card h-100">
+      <div class="card-body">
+        <div class="section-heading">
+          <h2>7日以内の締切</h2>
+          <a href="{{ url_for('applications.index') }}">すべて見る</a>
+        </div>
+        {% if upcoming_deadlines %}
+          <div class="list-group list-group-flush">
+            {% for deadline, label, application in upcoming_deadlines %}
+            {% set hours = (deadline - now).total_seconds() / 3600 %}
+            <a class="list-group-item list-group-item-action px-0 py-3 d-flex justify-content-between align-items-center" href="{{ url_for('applications.detail', application_id=application.id) }}">
+              <div>
+                <strong>{{ application.company_name }}</strong>
+                <div class="text-muted small">{{ label }}{% if application.position_name %} ・ {{ application.position_name }}{% endif %}</div>
+              </div>
+              <span class="deadline-badge {% if hours <= 72 %}urgent{% else %}soon{% endif %}">
+                {{ deadline.strftime("%m/%d %H:%M") }}
+              </span>
+            </a>
+            {% endfor %}
+          </div>
+        {% else %}
+          <div class="empty-state">7日以内の締切はありません。</div>
+        {% endif %}
+      </div>
+    </section>
+  </div>
+  <div class="col-lg-5">
+    <section class="card h-100">
+      <div class="card-body">
+        <div class="section-heading"><h2>今後の面接予定</h2></div>
+        {% if upcoming_interviews %}
+          {% for application in upcoming_interviews %}
+          <a class="schedule-item" href="{{ url_for('applications.detail', application_id=application.id) }}">
+            <div class="schedule-date">
+              <strong>{{ application.interview_at.strftime("%m/%d") }}</strong>
+              <span>{{ application.interview_at.strftime("%H:%M") }}</span>
+            </div>
+            <div><strong>{{ application.company_name }}</strong><small>{{ application.interview_format or "形式未定" }}</small></div>
+          </a>
+          {% endfor %}
+        {% else %}
+          <div class="empty-state">今後の面接予定はありません。</div>
+        {% endif %}
+      </div>
+    </section>
+  </div>
+</div>
+
+<section class="card mt-4">
+  <div class="card-body">
+    <div class="section-heading">
+      <div>
+        <p class="eyebrow mb-1">NEXT ACTIONS</p>
+        <h2>直近の未完了タスク</h2>
+      </div>
+      <span class="text-muted small">最大10件</span>
+    </div>
+    {% if upcoming_tasks %}
+      <div class="task-dashboard-list">
+        {% for item in upcoming_tasks %}
+        {% set deadline_state = item.deadline_state(now) %}
+        <a class="dashboard-task" href="{{ url_for('applications.detail', application_id=item.application_id) }}#checklist">
+          <div class="dashboard-task-main">
+            <strong>{{ item.title }}</strong>
+            <span>{{ item.application.company_name }}</span>
+          </div>
+          <span class="deadline-badge task-{{ deadline_state }}">
+            {{ item.due_at.strftime("%m/%d %H:%M") }}
+            {% if deadline_state == "overdue" %}・期限切れ{% elif deadline_state == "urgent" %}・3日以内{% elif deadline_state == "soon" %}・7日以内{% endif %}
+          </span>
+        </a>
+        {% endfor %}
+      </div>
+    {% else %}
+      <div class="empty-state py-4">期限が設定された未完了タスクはありません。</div>
+    {% endif %}
+  </div>
+</section>
+
+<section class="card mt-4">
+  <div class="card-body">
+    <div class="section-heading"><h2>最近更新した応募先</h2></div>
+    {% if recently_updated %}
+      <div class="table-responsive">
+        <table class="table align-middle mb-0">
+          <thead><tr><th>企業名</th><th>ステータス</th><th>志望度</th><th>更新日時</th></tr></thead>
+          <tbody>
+            {% for application in recently_updated %}
+            <tr>
+              <td><a class="company-link" href="{{ url_for('applications.detail', application_id=application.id) }}">{{ application.company_name }}</a></td>
+              <td><span class="status-badge">{{ application.status }}</span></td>
+              <td><span class="priority-stars">{{ "★" * application.priority }}</span><span class="stars-muted">{{ "★" * (5 - application.priority) }}</span></td>
+              <td class="text-muted">{{ application.updated_at.strftime("%Y/%m/%d %H:%M") }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="empty-state">
+        <p class="mb-2">まだ応募先が登録されていません。</p>
+        <a href="{{ url_for('applications.create') }}">最初の応募先を登録する</a>
+      </div>
+    {% endif %}
+  </div>
+</section>
+{% endblock %}

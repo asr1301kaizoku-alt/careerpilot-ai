@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}チェック項目を編集 | CareerPilot AI{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-7">
+    <div class="mb-4">
+      <p class="eyebrow mb-1">CHECKLIST</p>
+      <h1 class="h2 fw-bold">チェック項目を編集</h1>
+      <p class="text-muted mb-0">{{ item.application.company_name }}</p>
+    </div>
+    <form method="post" novalidate>
+      {{ form.hidden_tag() }}
+      <div class="card"><div class="card-body p-4">
+        <div class="mb-3">
+          {{ form.title.label(class="form-label required") }}
+          {{ form.title(class="form-control" + (" is-invalid" if form.title.errors else "")) }}
+          {% for error in form.title.errors %}<div class="invalid-feedback">{{ error }}</div>{% endfor %}
+        </div>
+        <div class="row g-3">
+          <div class="col-md-8">
+            {{ form.due_at.label(class="form-label") }}
+            {{ form.due_at(class="form-control" + (" is-invalid" if form.due_at.errors else "")) }}
+            {% for error in form.due_at.errors %}<div class="invalid-feedback">{{ error }}</div>{% endfor %}
+          </div>
+          <div class="col-md-4">
+            {{ form.sort_order.label(class="form-label") }}
+            {{ form.sort_order(class="form-control" + (" is-invalid" if form.sort_order.errors else "")) }}
+            {% for error in form.sort_order.errors %}<div class="invalid-feedback">{{ error }}</div>{% endfor %}
+          </div>
+        </div>
+      </div></div>
+      <div class="d-flex justify-content-end gap-2 mt-3">
+        <a class="btn btn-outline-secondary" href="{{ url_for('applications.detail', application_id=item.application_id) }}#checklist">キャンセル</a>
+        {{ form.submit(class="btn btn-primary px-4") }}
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

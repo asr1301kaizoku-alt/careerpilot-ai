@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% block title %}就活メール | CareerPilot AI{% endblock %}
+{% block content %}
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-md-end gap-3 mb-4">
+  <div>
+    <p class="eyebrow mb-1">JOB HUNTING MAIL</p>
+    <h1 class="h2 fw-bold mb-1">就活メール</h1>
+    <p class="text-muted mb-0">最近90日間のGmailを読み取り専用で表示します。</p>
+  </div>
+  {% if gmail_credential %}
+    <div class="email-list-toolbar d-flex flex-column align-items-md-end gap-2">
+      <span class="active-filter-label">{{ gmail_credential.google_account_email or "Gmail連携済み" }}</span>
+      {% if last_fetched_at %}
+        <small class="text-muted">最終取得：{{ last_fetched_at.strftime("%Y/%m/%d %H:%M:%S") }}</small>
+      {% endif %}
+      {% if refresh_url %}
+        <a class="btn btn-outline-primary" href="{{ refresh_url }}" data-loading-text="取得中…">最新のメールを取得</a>
+      {% endif %}
+    </div>
+  {% endif %}
+</div>
+
+{% if not gmail_credential %}
+  <section class="card">
+    <div class="card-body empty-state py-5">
+      <h2 class="h5 fw-bold text-dark">Gmailが未連携です</h2>
+      <p>就活用Googleアカウントを連携すると、最近のメールをここで確認できます。</p>
+      <a class="btn btn-primary" href="{{ url_for('integrations.settings') }}">外部連携設定を開く</a>
+    </div>
+  </section>
+{% else %}
+  <section class="card email-search-card mb-4">
+    <div class="card-body">
+      <form method="get" action="{{ url_for('emails.index') }}">
+        <label class="form-label fw-bold" for="emailQuery">Gmail検索</label>
+        <div class="d-flex flex-column flex-sm-row gap-2">
+          <input class="form-control" id="emailQuery" name="q" value="{{ query }}" maxlength="500" placeholder="例：面接、説明会、企業名">
+          <button class="btn btn-primary flex-shrink-0" type="submit">検索</button>
+          {% if query %}
+            <a class="btn btn-outline-secondary flex-shrink-0" href="{{ url_for('emails.index') }}">リセット</a>
+          {% endif %}
+        </div>
+        <p class="form-text mb-0">検索語はGmail APIへ渡し、常に最近90日間の条件と組み合わせます。</p>
+      </form>
+    </div>
+  </section>
+
+  {% if error_message %}
+    <div class="alert alert-warning" role="alert">
+      <p class="mb-2">{{ error_message }}</p>
+      {% if requires_reauthentication %}
+        <a class="alert-link" href="{{ url_for('integrations.settings') }}">外部連携設定を開く</a>
+      {% endif %}
+    </div>
+  {% elif emails %}
+    <section class="card email-list-card">
+      <div class="list-group list-group-flush">
+        {% for email in emails %}
+          <article class="list-group-item email-list-item">
+            <div class="d-flex flex-column flex-lg-row justify-content-between gap-2">
+              <div class="email-list-main">
+                <a class="email-subject" href="{{ url_for('emails.detail', message_id=email.message_id, return_to=list_return_url) }}">{{ email.subject }}</a>
+                <p class="email-sender mb-1">{{ email.sender }}</p>
+              </div>
+              <time class="email-date flex-shrink-0">
+                {{ email.received_at.strftime("%Y/%m/%d %H:%M") if email.received_at else (email.date_header or "受信日時不明") }}
+              </time>
+            </div>
+            <p class="email-snippet mb-2">{{ email.snippet or "プレビューはありません。" }}</p>
+            <div class="d-flex justify-content-end">
+              <a class="btn btn-sm btn-outline-primary" href="{{ url_for('emails.detail', message_id=email.message_id, return_to=list_return_url) }}">詳細を見る</a>
+            </div>
+          </article>
+        {% endfor %}
+      </div>
+    </section>
+  {% else %}
+    <section class="card">
+      <div class="card-body empty-state">
+        <h2 class="h5 fw-bold text-dark">条件に一致する就活メールはありません</h2>
+        <p>検索条件を変更するか、最新の一覧を取得してください。</p>
+        {% if query %}
+          <a class="btn btn-outline-primary" href="{{ url_for('emails.index') }}">検索条件をリセット</a>
+        {% elif refresh_url %}
+          <a class="btn btn-outline-primary" href="{{ refresh_url }}" data-loading-text="取得中…">最新のメールを取得</a>
+        {% endif %}
+      </div>
+    </section>
+  {% endif %}
+
+  {% if previous_url or next_url %}
+    <nav class="d-flex justify-content-between gap-3 mt-4" aria-label="メール一覧のページ移動">
+      {% if previous_url %}
+        <a class="btn btn-outline-secondary" href="{{ previous_url }}">← 戻る</a>
+      {% else %}<span></span>{% endif %}
+      {% if next_url %}
+        <a class="btn btn-outline-primary" href="{{ next_url }}">次へ →</a>
+      {% endif %}
+    </nav>
+  {% endif %}
+{% endif %}
+{% endblock %}

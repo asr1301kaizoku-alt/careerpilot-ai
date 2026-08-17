@@ -1,0 +1,196 @@
+{% extends "base.html" %}
+{% block title %}AI解析結果から予定を登録 | CareerPilot AI{% endblock %}
+{% block content %}
+{% macro field_errors(field) %}
+  {% for error in field.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+{% endmacro %}
+{% macro csrf_field(form, field_id) -%}
+  {% if form.csrf_token is defined %}{{ form.csrf_token(id=field_id) }}{% endif %}
+{%- endmacro %}
+
+<div class="ai-calendar-apply">
+  <div class="mb-4">
+    <a class="text-decoration-none small" href="{{ cancel_url }}">← メール詳細へ戻る</a>
+    <p class="eyebrow mt-3 mb-1">AI CALENDAR REVIEW</p>
+    <h1 class="h2 fw-bold mb-2">AI解析結果から予定を登録</h1>
+    <p class="text-muted mb-0">AIが抽出した日時候補です。元メールを確認し、登録する予定と内容を編集してください。</p>
+  </div>
+
+  <div class="alert alert-info" role="note">
+    この画面を送信するまでGoogle Calendar APIは呼び出しません。応募先の日時も変更しません。
+  </div>
+
+  <section class="card mb-4" aria-labelledby="calendarConnectionHeading">
+    <div class="card-body p-4 d-flex flex-column flex-sm-row justify-content-between align-items-sm-center gap-3">
+      <div>
+        <h2 class="h5 fw-bold mb-1" id="calendarConnectionHeading">Googleカレンダー</h2>
+        <p class="small text-muted mb-0">選択した予定は連携中アカウントのprimaryカレンダーへ登録します。</p>
+      </div>
+      {% if calendar_connected %}
+        <div class="d-flex flex-column align-items-sm-end gap-2">
+          <span class="integration-status connected">連携済み</span>
+          {% if has_registered_candidates %}
+            <form method="post" action="{{ url_for('emails.check_analysis_calendar_status', message_id=message_id) }}">
+              {{ csrf_field(status_form, "calendarStatusCsrf") }}
+              {{ status_form.token }}
+              {{ status_form.return_to }}
+              {{ status_form.submit(class="btn btn-outline-primary btn-sm", data_loading_text="確認中…") }}
+            </form>
+          {% endif %}
+        </div>
+      {% else %}
+        <div class="d-flex flex-column align-items-sm-end gap-2">
+          <span class="integration-status disconnected">未連携</span>
+          <a class="btn btn-outline-primary btn-sm" href="{{ url_for('integrations.settings') }}">外部連携設定を開く</a>
+        </div>
+      {% endif %}
+    </div>
+  </section>
+
+  <section class="card mb-4" aria-labelledby="calendarApplicationHeading">
+    <div class="card-body p-4">
+      <h2 class="h5 fw-bold" id="calendarApplicationHeading">紐付け先の応募先（任意）</h2>
+      <p class="small text-muted">既存応募先を選ぶと同期済み予定との重複を確認します。日時が一致しない候補や一般イベントは独立予定として登録します。</p>
+      <form method="get" action="{{ url_for('emails.apply_analysis_calendar', message_id=message_id) }}" class="row g-2 align-items-end">
+        <input type="hidden" name="token" value="{{ form.token.data }}">
+        <input type="hidden" name="return_to" value="{{ return_to }}">
+        <div class="col-lg-9">
+          <label class="form-label" for="calendar-application-select">応募先</label>
+          <select class="form-select" id="calendar-application-select" name="application_id">
+            {% for application_id, label in application_choices %}
+              <option value="{{ application_id }}"{% if (selected_application and selected_application.id == application_id) or (not selected_application and application_id == -1) %} selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-lg-3 d-grid">
+          <button class="btn btn-outline-primary" type="submit">選択を反映</button>
+        </div>
+      </form>
+      {% if selected_application %}
+        <div class="selected-calendar-application mt-3">
+          <span class="fw-semibold">選択中：</span>{{ selected_application.company_name }}{% if selected_application.position_name %}（{{ selected_application.position_name }}）{% endif %}
+        </div>
+      {% else %}
+        <p class="small text-muted mt-3 mb-0">未選択のため、予定は応募先と紐付かない独立イベントとして登録されます。</p>
+      {% endif %}
+    </div>
+  </section>
+
+  <form method="post" novalidate>
+    {{ csrf_field(form, "calendarApplyCsrf") }}
+    {{ form.token }}
+    {{ form.return_to }}
+    <div class="visually-hidden" aria-hidden="true">{{ form.application_id }}</div>
+    {{ field_errors(form.application_id) }}
+
+    <div class="row g-4">
+      <div class="col-xl-8">
+        <section class="card mb-4" aria-labelledby="calendarCandidatesHeading">
+          <div class="card-body p-4">
+            <h2 class="form-section-title" id="calendarCandidatesHeading">登録候補</h2>
+            {% for error in form.candidates.errors %}
+              {% if error is string %}<div class="alert alert-warning mt-3">{{ error }}</div>{% endif %}
+            {% endfor %}
+
+            {% if form.candidates.entries %}
+              <div class="ai-calendar-candidates mt-3">
+                {% for candidate in form.candidates %}
+                  {% set event_type = candidate.event_type.data %}
+                  {% set candidate_state = candidate_states[loop.index0] %}
+                  <article class="ai-calendar-candidate">
+                    {{ candidate.event_type }}
+                    <div class="d-flex flex-column flex-sm-row justify-content-between gap-2 mb-3">
+                      <div class="form-check">
+                        {{ candidate.selected(class="form-check-input", disabled=candidate_state.registered) }}
+                        <label class="form-check-label fw-bold" for="{{ candidate.selected.id }}">{{ candidate_labels.get(event_type, "予定") }}を登録する</label>
+                      </div>
+                      {% if candidate_state.registered %}
+                        <span class="integration-status connected">登録済み・重複登録しません</span>
+                      {% elif candidate_state.duplicate %}
+                        <span class="integration-status disconnected">同期済み・重複登録しません</span>
+                      {% elif candidate_state.sync_eligible %}
+                        <span class="integration-status connected">応募先と同期予定</span>
+                      {% elif selected_application %}
+                        <span class="integration-status disconnected">独立イベントとして登録</span>
+                      {% endif %}
+                    </div>
+                    <div class="row g-3">
+                      <div class="col-12">
+                        {{ candidate.title.label(class="form-label required") }}
+                        {{ candidate.title(class="form-control" + (" is-invalid" if candidate.title.errors else ""), maxlength="200") }}
+                        {{ field_errors(candidate.title) }}
+                      </div>
+                      <div class="col-md-6">
+                        {{ candidate.start_at.label(class="form-label required") }}
+                        {{ candidate.start_at(class="form-control" + (" is-invalid" if candidate.start_at.errors else ""), step="60") }}
+                        {{ field_errors(candidate.start_at) }}
+                      </div>
+                      <div class="col-md-6">
+                        {{ candidate.end_at.label(class="form-label required") }}
+                        {{ candidate.end_at(class="form-control" + (" is-invalid" if candidate.end_at.errors else ""), step="60") }}
+                        {{ field_errors(candidate.end_at) }}
+                      </div>
+                    </div>
+                    <div class="ai-calendar-evidence mt-3">
+                      <div class="mb-2">
+                        <span class="fw-semibold">AI抽出日時</span>
+                        <p class="mb-0">{{ candidate_ai_datetime(event_type) }}</p>
+                      </div>
+                      <span class="fw-semibold">AI根拠</span>
+                      <p class="mb-0">{{ candidate_evidence(event_type) or "根拠の短い原文はありません。元メールを確認してください。" }}</p>
+                    </div>
+                  </article>
+                {% endfor %}
+              </div>
+            {% else %}
+              <div class="alert alert-warning mt-3 mb-0">登録候補にできるタイムゾーン付き日時はありません。</div>
+            {% endif %}
+          </div>
+        </section>
+
+        {% if datetime_text_references %}
+          <section class="card mb-4" aria-labelledby="calendarTextReferenceHeading">
+            <div class="card-body p-4">
+              <h2 class="h5 fw-bold" id="calendarTextReferenceHeading">日時の参考情報</h2>
+              <p class="small text-muted">時刻またはタイムゾーンを確定できないため、自動候補にはしていません。</p>
+              <dl class="mb-0">
+                {% for label, value in datetime_text_references %}
+                  <div class="mb-2"><dt>{{ label }}</dt><dd class="mb-0">{{ value }}</dd></div>
+                {% endfor %}
+              </dl>
+            </div>
+          </section>
+        {% endif %}
+      </div>
+
+      <aside class="col-xl-4">
+        <section class="card ai-calendar-reference mb-4" aria-labelledby="calendarReferenceHeading">
+          <div class="card-body p-4">
+            <h2 class="h5 fw-bold" id="calendarReferenceHeading">AI参考情報</h2>
+            <dl>
+              <div><dt>会社名</dt><dd>{{ ai_result.company_name or "不明" }}</dd></div>
+              <div><dt>メール種別</dt><dd>{{ ai_result.mail_category_label }}</dd></div>
+              <div><dt>信頼度</dt><dd>{{ ai_result.confidence_label }}</dd></div>
+            </dl>
+
+            <h3 class="h6 fw-bold mt-4">必要な対応</h3>
+            {% if ai_result.action_items %}
+              <ul class="ps-3">{% for item in ai_result.action_items %}<li>{{ item }}</li>{% endfor %}</ul>
+            {% else %}<p class="text-muted">なし</p>{% endif %}
+
+            <h3 class="h6 fw-bold mt-4">重要事項</h3>
+            {% if ai_result.important_notes %}
+              <ul class="ps-3 mb-0">{% for item in ai_result.important_notes %}<li>{{ item }}</li>{% endfor %}</ul>
+            {% else %}<p class="text-muted mb-0">なし</p>{% endif %}
+          </div>
+        </section>
+      </aside>
+    </div>
+
+    <div class="d-flex flex-column-reverse flex-sm-row justify-content-end gap-2">
+      <a class="btn btn-outline-secondary" href="{{ cancel_url }}">キャンセル</a>
+      {{ form.submit(class="btn btn-primary px-4", disabled=not calendar_connected, data_loading_text="登録中…") }}
+    </div>
+  </form>
+</div>
+{% endblock %}

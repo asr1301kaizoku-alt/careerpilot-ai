@@ -1,0 +1,199 @@
+{% extends "base.html" %}
+{% block title %}メール詳細 | CareerPilot AI{% endblock %}
+{% block content %}
+<div class="mb-4">
+  <a class="text-decoration-none small" href="{{ return_to }}">← {{ back_link_label }}</a>
+  <p class="eyebrow mt-3 mb-1">MAIL DETAIL</p>
+  <h1 class="h2 fw-bold mb-0">メール詳細</h1>
+</div>
+
+{% if error_message %}
+  <div class="alert alert-warning" role="alert">
+    <p class="mb-2">{{ error_message }}</p>
+    {% if requires_reauthentication %}
+      <a class="alert-link" href="{{ url_for('integrations.settings') }}">外部連携設定を開く</a>
+    {% endif %}
+  </div>
+{% elif email %}
+  <article class="card email-detail-card">
+    <div class="card-body p-4 p-lg-5">
+      <h2 class="h4 fw-bold email-detail-subject">{{ email.subject }}</h2>
+      <dl class="detail-grid mt-4 mb-0">
+        <div><dt>From</dt><dd>{{ email.sender }}</dd></div>
+        <div><dt>To</dt><dd>{{ email.recipient }}</dd></div>
+        <div><dt>Date</dt><dd>{{ email.date_header or (email.received_at.strftime("%Y/%m/%d %H:%M") if email.received_at else "不明") }}</dd></div>
+      </dl>
+
+      <section class="email-preview-box mt-4">
+        <h3 class="h6 fw-bold">プレビュー</h3>
+        <p class="mb-0">{{ email.snippet or "プレビューはありません。" }}</p>
+      </section>
+
+      <section class="email-ai-panel mt-4" id="email-ai-section" aria-labelledby="emailAiHeading">
+        <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-start gap-3">
+          <div>
+            <h3 class="h5 fw-bold mb-2" id="emailAiHeading">AIメール解析</h3>
+            <p class="small text-muted mb-0">解析を実行すると、このメールの件名・送信者表示名・受信日時・本文テキストがGemini APIへ送信されます。</p>
+          </div>
+          {% if analyze_form %}
+            <form method="post" action="{{ url_for('emails.analyze', message_id=email.message_id) }}#ai-analysis-feedback" class="flex-shrink-0">
+              {{ analyze_form.hidden_tag() }}
+              {{ analyze_form.submit(class="btn btn-primary", disabled=not ai_available, data_loading_text="解析中…") }}
+            </form>
+          {% endif %}
+        </div>
+        {% if not ai_available %}
+          <p class="small text-warning mt-3 mb-0">Gemini APIキーが未設定のため、AI解析は現在利用できません。</p>
+        {% endif %}
+      </section>
+
+      {% if ai_error_message or ai_result %}
+        <div id="ai-analysis-feedback">
+        {% if ai_error_message %}
+          <div class="alert alert-warning mt-4 mb-0" role="alert">{{ ai_error_message }}</div>
+        {% endif %}
+
+        {% if ai_result %}
+        <section class="card ai-analysis-result mt-4" id="ai-analysis-result" aria-labelledby="aiResultHeading">
+          <div class="card-body p-4">
+            <div class="d-flex flex-column flex-sm-row justify-content-between align-items-sm-center gap-2 mb-3">
+              <h3 class="h5 fw-bold mb-0" id="aiResultHeading">AI解析結果</h3>
+              <span class="integration-status connected">信頼度：{{ ai_result.confidence_label }}</span>
+            </div>
+
+            {% if analysis_session_state %}
+              <div class="ai-analysis-session-state alert alert-light border mb-4" role="status">
+                <p class="fw-semibold mb-2">この解析結果からの操作状況</p>
+                <ul class="list-unstyled mb-0 d-grid gap-2">
+                  {% if analysis_session_state.application_completed %}
+                    <li>✓ 応募先への反映が完了しました
+                      {% if analysis_session_state.application_id %}
+                        <a class="ms-2" href="{{ url_for('applications.detail', application_id=analysis_session_state.application_id) }}">登録した応募先を見る</a>
+                      {% endif %}
+                    </li>
+                  {% else %}
+                    <li class="text-muted">○ 応募先へ未反映</li>
+                  {% endif %}
+                  {% if analysis_session_state.checklist_completed %}
+                    <li>✓ チェックリストへ{{ analysis_session_state.checklist_count }}件追加しました
+                      {% if analysis_session_state.checklist_application_id %}
+                        <a class="ms-2" href="{{ url_for('applications.detail', application_id=analysis_session_state.checklist_application_id) }}#checklist">追加先を見る</a>
+                      {% endif %}
+                    </li>
+                  {% else %}
+                    <li class="text-muted">○ チェックリストへ未追加</li>
+                  {% endif %}
+                  {% if analysis_session_state.calendar_attempted %}
+                    <li>✓ Googleカレンダー登録を実行しました（登録{{ analysis_session_state.calendar_created_count }}件{% if analysis_session_state.calendar_failed_count %}・失敗{{ analysis_session_state.calendar_failed_count }}件{% endif %}）</li>
+                  {% else %}
+                    <li class="text-muted">○ Googleカレンダー登録は未実行</li>
+                  {% endif %}
+                </ul>
+              </div>
+            {% endif %}
+
+            <dl class="detail-grid mb-4">
+              <div><dt>企業名</dt><dd>{{ ai_result.company_name or "不明" }}</dd></div>
+              <div><dt>メール種別</dt><dd>{{ ai_result.mail_category_label }}</dd></div>
+            </dl>
+
+            <div class="mb-4">
+              <h4 class="h6 fw-bold">要約</h4>
+              <p class="mb-0 ai-analysis-text">{{ ai_result.summary }}</p>
+            </div>
+
+            <div class="mb-4">
+              <h4 class="h6 fw-bold">抽出された予定</h4>
+              <dl class="detail-grid mb-0">
+                <div><dt>ES締切</dt><dd>{{ ai_result.datetime_display("es_deadline") }}</dd></div>
+                <div><dt>Webテスト期限</dt><dd>{{ ai_result.datetime_display("web_test_deadline") }}</dd></div>
+                <div><dt>面接日時</dt><dd>{{ ai_result.datetime_display("interview_datetime") }}</dd></div>
+                <div><dt>イベント日時</dt><dd>{{ ai_result.event_datetime_range_display() }}</dd></div>
+              </dl>
+            </div>
+
+            <div class="row g-4 mb-4">
+              <div class="col-md-6">
+                <h4 class="h6 fw-bold">必要な対応</h4>
+                {% if ai_result.action_items %}
+                  <ul class="mb-0 ps-3">
+                    {% for item in ai_result.action_items %}<li>{{ item }}</li>{% endfor %}
+                  </ul>
+                {% else %}
+                  <p class="text-muted mb-0">なし</p>
+                {% endif %}
+              </div>
+              <div class="col-md-6">
+                <h4 class="h6 fw-bold">重要事項</h4>
+                {% if ai_result.important_notes %}
+                  <ul class="mb-0 ps-3">
+                    {% for note in ai_result.important_notes %}<li>{{ note }}</li>{% endfor %}
+                  </ul>
+                {% else %}
+                  <p class="text-muted mb-0">なし</p>
+                {% endif %}
+              </div>
+            </div>
+
+            {% if ai_result.evidence_items %}
+              <div class="ai-evidence-box mb-4">
+                <h4 class="h6 fw-bold">原文の根拠</h4>
+                <dl class="mb-0">
+                  {% for label, evidence in ai_result.evidence_items %}
+                    <div class="mb-2"><dt>{{ label }}</dt><dd class="mb-0">{{ evidence }}</dd></div>
+                  {% endfor %}
+                </dl>
+              </div>
+            {% endif %}
+
+            <footer class="ai-analysis-footer">
+              <div class="alert alert-info mb-3" role="note">AI解析結果には誤りが含まれる可能性があります。登録前に必ず元メールを確認してください。</div>
+              {% if analysis_session_token %}
+                <p class="small text-muted mb-3">この解析結果は一時的に保持されています。別内容で解析し直す場合は「AIで再解析」を押してください。</p>
+              {% endif %}
+              {% if ai_apply_token or ai_checklist_token or ai_calendar_token %}
+                <div class="ai-analysis-actions d-flex flex-column flex-md-row flex-wrap justify-content-end gap-2">
+                  {% if ai_apply_token %}
+                  <a class="btn btn-primary" href="{{ url_for('emails.apply_analysis', message_id=email.message_id, token=ai_apply_token, return_to=return_to) }}">応募先へ反映</a>
+                  {% endif %}
+                  {% if ai_checklist_token and ai_result.action_items %}
+                  <a class="btn btn-outline-primary" href="{{ url_for('emails.apply_analysis_checklist', message_id=email.message_id, token=ai_checklist_token, return_to=return_to) }}">必要な対応をチェックリストへ追加</a>
+                  {% elif ai_checklist_token %}
+                  <button class="btn btn-outline-secondary" type="button" disabled>追加できる対応はありません</button>
+                  {% endif %}
+                  {% if ai_calendar_token %}
+                  <a class="btn btn-outline-primary" href="{{ url_for('emails.apply_analysis_calendar', message_id=email.message_id, token=ai_calendar_token, return_to=return_to) }}">予定をGoogleカレンダーへ追加</a>
+                  {% else %}
+                  <button class="btn btn-outline-secondary" type="button" disabled>追加できる予定はありません</button>
+                  {% endif %}
+                </div>
+              {% else %}
+                <p class="small text-muted mb-0">現在の解析結果は応募先へ引き継げません。必要に応じてもう一度解析してください。</p>
+              {% endif %}
+            </footer>
+          </div>
+        </section>
+        {% endif %}
+        </div>
+      {% endif %}
+
+      <section class="email-body-section mt-4" aria-labelledby="emailBodyHeading">
+        <div class="accordion email-body-accordion" id="emailBodyAccordion">
+          <div class="accordion-item">
+            <h3 class="accordion-header" id="emailBodyHeading">
+              <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#emailBodyCollapse" aria-expanded="false" aria-controls="emailBodyCollapse">
+                メール本文を確認する
+              </button>
+            </h3>
+            <div id="emailBodyCollapse" class="accordion-collapse collapse" aria-labelledby="emailBodyHeading" data-bs-parent="#emailBodyAccordion">
+              <div class="accordion-body">
+                <div class="email-body-text">{{ email.body_text }}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </article>
+{% endif %}
+{% endblock %}

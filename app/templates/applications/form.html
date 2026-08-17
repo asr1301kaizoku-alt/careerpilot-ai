@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}{{ page_title }} | CareerPilot AI{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-xl-9">
+    <div class="mb-4"><p class="eyebrow mb-1">APPLICATION</p><h1 class="h2 fw-bold">{{ page_title }}</h1></div>
+    <form method="post" novalidate>
+      {{ form.hidden_tag() }}
+      <div class="card mb-4"><div class="card-body p-4">
+        <h2 class="form-section-title">基本情報</h2>
+        <div class="row g-3">
+          <div class="col-md-7">{{ form.company_name.label(class="form-label required") }}{{ form.company_name(class="form-control" + (" is-invalid" if form.company_name.errors else ""), placeholder="例：キャリアパイロット株式会社") }}{% for error in form.company_name.errors %}<div class="invalid-feedback">{{ error }}</div>{% endfor %}</div>
+          <div class="col-md-5">{{ form.position_name.label(class="form-label") }}{{ form.position_name(class="form-control", placeholder="例：総合職") }}</div>
+          <div class="col-md-7">{{ form.application_url.label(class="form-label") }}{{ form.application_url(class="form-control" + (" is-invalid" if form.application_url.errors else ""), placeholder="https://") }}{% for error in form.application_url.errors %}<div class="invalid-feedback">{{ error }}</div>{% endfor %}</div>
+          <div class="col-md-5">{{ form.application_source.label(class="form-label") }}{{ form.application_source(class="form-control", placeholder="例：企業サイト") }}</div>
+          <div class="col-md-7">{{ form.status.label(class="form-label required") }}{{ form.status(class="form-select") }}</div>
+          <div class="col-md-5">{{ form.priority.label(class="form-label required") }}{{ form.priority(class="form-select") }}{% for error in form.priority.errors %}<div class="text-danger small mt-1">{{ error }}</div>{% endfor %}<div class="form-text">1（低い）〜 5（高い）</div></div>
+        </div>
+      </div></div>
+      <div class="card mb-4"><div class="card-body p-4">
+        <h2 class="form-section-title">締切・面接予定</h2>
+        <div class="row g-3">
+          <div class="col-md-6">{{ form.es_deadline.label(class="form-label") }}{{ form.es_deadline(class="form-control") }}</div>
+          <div class="col-md-6">{{ form.web_test_deadline.label(class="form-label") }}{{ form.web_test_deadline(class="form-control") }}</div>
+          <div class="col-md-6">{{ form.interview_at.label(class="form-label") }}{{ form.interview_at(class="form-control") }}</div>
+          <div class="col-md-6">{{ form.interview_format.label(class="form-label") }}{{ form.interview_format(class="form-control", placeholder="例：オンライン / 東京本社") }}</div>
+        </div>
+      </div></div>
+      <div class="card mb-4"><div class="card-body p-4">
+        <h2 class="form-section-title">メモ</h2>
+        {{ form.memo(class="form-control", rows="5", placeholder="選考で確認したいこと、担当者、準備メモなど") }}
+      </div></div>
+      {% if form.create_default_checklist is defined %}
+      <div class="card mb-4"><div class="card-body p-4">
+        <div class="form-check">
+          {{ form.create_default_checklist(class="form-check-input") }}
+          {{ form.create_default_checklist.label(class="form-check-label fw-semibold") }}
+        </div>
+        <div class="form-text ms-4">企業研究、ES、Webテスト、面接準備など7項目を自動で追加します。</div>
+      </div></div>
+      {% endif %}
+      <div class="d-flex justify-content-end gap-2">
+        <a class="btn btn-outline-secondary" href="{{ url_for('applications.detail', application_id=application.id) if application else url_for('applications.index') }}">キャンセル</a>
+        {{ form.submit(class="btn btn-primary px-4") }}
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

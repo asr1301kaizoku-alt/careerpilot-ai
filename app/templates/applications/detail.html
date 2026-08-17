@@ -1,0 +1,292 @@
+{% extends "base.html" %}
+{% block title %}{{ application.company_name }} | CareerPilot AI{% endblock %}
+{% block content %}
+{% macro csrf_field(form, field_id) -%}
+  {% if form.csrf_token is defined %}{{ form.csrf_token(id=field_id) }}{% endif %}
+{%- endmacro %}
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-md-start mb-4 gap-3">
+  <div>
+    <p class="eyebrow mb-1">APPLICATION DETAIL</p>
+    <h1 class="h2 fw-bold mb-1">{{ application.company_name }}</h1>
+    <p class="text-muted mb-0">{{ application.position_name or "職種・コース未設定" }}</p>
+  </div>
+  <div class="d-flex gap-2">
+    <a class="btn btn-outline-primary" href="{{ url_for('applications.edit', application_id=application.id) }}">編集する</a>
+    <button class="btn btn-outline-danger" type="button" data-bs-toggle="modal" data-bs-target="#deleteModal">削除</button>
+  </div>
+</div>
+<div class="row g-4">
+  <div class="col-lg-8">
+    <div class="card"><div class="card-body p-4">
+      <div class="detail-header"><span class="status-badge">{{ application.status }}</span><span class="priority-stars">{{ "★" * application.priority }}</span><span class="stars-muted">{{ "★" * (5 - application.priority) }}</span></div>
+      <dl class="detail-grid">
+        <div><dt>応募経路</dt><dd>{{ application.application_source or "未設定" }}</dd></div>
+        <div><dt>面接形式</dt><dd>{{ application.interview_format or "未設定" }}</dd></div>
+        <div><dt>応募ページ</dt><dd>{% if application.application_url %}<a href="{{ application.application_url }}" target="_blank" rel="noopener noreferrer">応募ページを開く ↗</a>{% else %}未設定{% endif %}</dd></div>
+        <div><dt>最終更新</dt><dd>{{ application.updated_at.strftime("%Y/%m/%d %H:%M") }}</dd></div>
+      </dl>
+      <hr>
+      <h2 class="form-section-title mt-4">メモ</h2>
+      <div class="memo-box">{{ application.memo or "メモはありません。" }}</div>
+    </div></div>
+  </div>
+  <div class="col-lg-4">
+    <div class="card"><div class="card-body p-4">
+      <h2 class="form-section-title">スケジュール</h2>
+      {% for label, value in [("ES締切", application.es_deadline), ("Webテスト期限", application.web_test_deadline), ("面接日時", application.interview_at)] %}
+      <div class="detail-schedule"><span>{{ label }}</span><strong>{{ value.strftime("%Y/%m/%d %H:%M") if value else "未設定" }}</strong></div>
+      {% endfor %}
+    </div></div>
+    <div class="card mt-4 calendar-sync-card"><div class="card-body p-4">
+      <p class="eyebrow mb-1">CALENDAR SYNC</p>
+      <h2 class="form-section-title mb-3">Googleカレンダー</h2>
+      <div class="alert alert-info small py-2" role="note">
+        応募先情報を変更した場合は、必要に応じてGoogleカレンダーを更新してください。
+      </div>
+      {% if has_bulk_create_targets or has_bulk_update_targets or has_bulk_delete_targets %}
+      <div class="border rounded-3 bg-body-tertiary p-3 mb-3">
+        <div class="small fw-semibold mb-1">Googleカレンダー一括操作</div>
+        <p class="small text-muted mb-2">登録・更新は日時設定済み、削除は同期済みの予定が対象です。</p>
+        <div class="d-grid gap-2">
+        {% if has_bulk_create_targets %}
+        <form class="d-grid" method="post" action="{{ url_for('integrations.bulk_create_calendar_events', application_id=application.id) }}">
+          {{ csrf_field(calendar_bulk_create_form, "bulkCreateCalendarCsrf") }}
+          {{ calendar_bulk_create_form.submit(class="btn btn-primary fw-semibold", id="bulkCreateCalendarSubmit", data_loading_text="一括登録中…") }}
+        </form>
+        {% endif %}
+        {% if has_bulk_update_targets %}
+        <form class="d-grid" method="post" action="{{ url_for('integrations.bulk_update_calendar_events', application_id=application.id) }}">
+          {{ csrf_field(calendar_bulk_update_form, "bulkUpdateCalendarCsrf") }}
+          {{ calendar_bulk_update_form.submit(class="btn btn-outline-primary fw-semibold", id="bulkUpdateCalendarSubmit", data_loading_text="一括更新中…") }}
+        </form>
+        {% endif %}
+        {% if has_bulk_delete_targets %}
+        <button class="btn btn-outline-danger fw-semibold" type="button" data-bs-toggle="modal" data-bs-target="#bulkDeleteCalendarEventsModal">
+          Googleカレンダーから一括削除
+        </button>
+        {% endif %}
+        </div>
+      </div>
+      {% endif %}
+      <div class="calendar-sync-list">
+        {% for calendar_entry in calendar_entries %}
+        <section class="calendar-sync-entry">
+          <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
+            <div class="min-w-0">
+              <h3 class="h6 fw-bold mb-1">{{ calendar_entry.label }}</h3>
+              <div class="small text-muted">
+                {{ calendar_entry.scheduled_at.strftime("%Y/%m/%d %H:%M") if calendar_entry.scheduled_at else "日時未設定" }}
+              </div>
+            </div>
+            <span class="integration-status {{ 'connected' if calendar_entry.sync else 'disconnected' }}">
+              {{ "同期済み" if calendar_entry.sync else "未同期" }}
+            </span>
+          </div>
+          {% if calendar_entry.sync %}
+            <dl class="mb-3">
+              <dt class="text-muted small mb-1">イベントID</dt>
+              <dd class="calendar-event-id mb-0"><code>{{ calendar_entry.sync.external_event_id }}</code></dd>
+            </dl>
+            <div class="calendar-sync-actions d-grid gap-2">
+              <form class="d-grid" method="post" action="{{ url_for(calendar_entry.update_endpoint, application_id=application.id) }}">
+                {{ csrf_field(calendar_update_form, "updateCalendarCsrf-" ~ calendar_entry.event_type) }}
+                {{ calendar_update_form.submit(class="btn btn-outline-primary", id="updateCalendarSubmit-" ~ calendar_entry.event_type, data_loading_text="更新中…") }}
+              </form>
+              <button class="btn btn-outline-danger" type="button" data-bs-toggle="modal" data-bs-target="#{{ calendar_entry.modal_id }}">
+                Googleカレンダーから削除
+              </button>
+            </div>
+          {% else %}
+            <form class="d-grid" method="post" action="{{ url_for(calendar_entry.create_endpoint, application_id=application.id) }}">
+              {{ csrf_field(calendar_create_form, "createCalendarCsrf-" ~ calendar_entry.event_type) }}
+              {{ calendar_create_form.submit(class="btn btn-primary", id="createCalendarSubmit-" ~ calendar_entry.event_type, data_loading_text="登録中…") }}
+            </form>
+          {% endif %}
+        </section>
+        {% endfor %}
+      </div>
+    </div></div>
+  </div>
+</div>
+{% if has_bulk_delete_targets %}
+<div class="modal fade" id="bulkDeleteCalendarEventsModal" tabindex="-1" aria-labelledby="bulkDeleteCalendarEventsModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered"><div class="modal-content">
+    <div class="modal-header">
+      <h2 class="modal-title fs-5" id="bulkDeleteCalendarEventsModalLabel">Googleカレンダーの予定を一括削除しますか？</h2>
+      <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="閉じる"></button>
+    </div>
+    <div class="modal-body">
+      <p>Googleカレンダーへ同期済みの予定をまとめて削除します。</p>
+      <p class="mb-0">この操作はGoogleカレンダー上の予定のみを削除します。CareerPilot AIの面接日時・ES締切・Webテスト期限・応募先情報は削除されません。</p>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">キャンセル</button>
+      <form method="post" action="{{ url_for('integrations.bulk_delete_calendar_events', application_id=application.id) }}">
+        {{ csrf_field(calendar_bulk_delete_form, "bulkDeleteCalendarCsrf") }}
+        {{ calendar_bulk_delete_form.submit(class="btn btn-danger", id="bulkDeleteCalendarSubmit", data_loading_text="一括削除中…") }}
+      </form>
+    </div>
+  </div></div>
+</div>
+{% endif %}
+{% for calendar_entry in calendar_entries %}
+{% if calendar_entry.sync %}
+<div class="modal fade" id="{{ calendar_entry.modal_id }}" tabindex="-1" aria-labelledby="{{ calendar_entry.modal_id }}Label" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered"><div class="modal-content">
+    <div class="modal-header">
+      <h2 class="modal-title fs-5" id="{{ calendar_entry.modal_id }}Label">Googleカレンダーの{{ calendar_entry.label }}予定を削除しますか？</h2>
+      <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="閉じる"></button>
+    </div>
+    <div class="modal-body">{{ calendar_entry.delete_description }}</div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">キャンセル</button>
+      <form method="post" action="{{ url_for(calendar_entry.delete_endpoint, application_id=application.id) }}">
+        {{ csrf_field(calendar_delete_form, "deleteCalendarCsrf-" ~ calendar_entry.event_type) }}
+        {{ calendar_delete_form.submit(class="btn btn-danger", id="deleteCalendarSubmit-" ~ calendar_entry.event_type, data_loading_text="削除中…") }}
+      </form>
+    </div>
+  </div></div>
+</div>
+{% endif %}
+{% endfor %}
+<section class="card mt-4" id="checklist">
+  <div class="card-body p-4">
+    <div class="d-flex flex-column flex-sm-row justify-content-between align-items-sm-center gap-2 mb-3">
+      <div>
+        <p class="eyebrow mb-1">NEXT ACTIONS</p>
+        <h2 class="h5 fw-bold mb-0">チェックリスト <span class="text-muted fw-normal">{{ checklist_completed }} / {{ checklist_total }} 完了</span></h2>
+      </div>
+      <strong class="progress-label">{{ checklist_progress }}%</strong>
+    </div>
+    <div class="progress checklist-progress mb-4" role="progressbar" aria-label="チェックリスト進捗" aria-valuenow="{{ checklist_progress }}" aria-valuemin="0" aria-valuemax="100">
+      <div class="progress-bar" style="width: {{ checklist_progress }}%"></div>
+    </div>
+
+    {% if checklist_items %}
+    <div class="checklist-items mb-4">
+      {% for item in checklist_items %}
+      {% set deadline_state = item.deadline_state(now) %}
+      {% set item_calendar_sync = checklist_calendar_syncs.get(item.id) %}
+      <article class="checklist-item {% if item.is_completed %}completed{% endif %}">
+        <div class="checklist-status-icon" aria-hidden="true">{{ "✓" if item.is_completed else "○" }}</div>
+        <div class="checklist-content">
+          <div class="checklist-title">{{ item.title }}</div>
+          <div class="checklist-meta">
+            <span class="task-state-label {{ 'done' if item.is_completed else 'open' }}">{{ "完了" if item.is_completed else "未完了" }}</span>
+            <span class="task-due {{ deadline_state }}">
+              {% if item.due_at %}期限 {{ item.due_at.strftime("%Y/%m/%d %H:%M") }}{% else %}期限なし{% endif %}
+              {% if deadline_state == "overdue" %}・期限切れ{% elif deadline_state == "urgent" %}・3日以内{% endif %}
+            </span>
+          </div>
+          <div class="checklist-calendar-panel">
+            {% if item_calendar_sync %}
+            <div class="checklist-calendar-header">
+              <span class="integration-status connected">✓ Googleカレンダー同期済み</span>
+              <span class="small text-muted">タスク内容・期限・完了状態を変更した場合は、Googleカレンダーを手動更新してください。</span>
+            </div>
+            <div class="checklist-calendar-actions">
+              {% if item.due_at %}
+              <form method="post" action="{{ url_for('checklists.update_calendar_event', item_id=item.id) }}">
+                {{ csrf_field(calendar_update_form, "updateChecklistCalendarCsrf-" ~ item.id) }}
+                <button class="btn btn-sm btn-outline-primary" type="submit" data-loading-text="更新中…">Googleカレンダーを更新</button>
+              </form>
+              {% else %}
+              <span class="small text-muted">期限を設定するとGoogleカレンダーを更新できます。</span>
+              {% endif %}
+              <button class="btn btn-sm btn-outline-danger" type="button" data-bs-toggle="modal" data-bs-target="#deleteChecklistCalendarModal{{ item.id }}">Googleカレンダーから削除</button>
+            </div>
+            {% elif item.due_at %}
+            <form class="d-grid" method="post" action="{{ url_for('checklists.create_calendar_event', item_id=item.id) }}">
+              {{ csrf_field(calendar_create_form, "createChecklistCalendarCsrf-" ~ item.id) }}
+              <button class="btn btn-sm btn-outline-primary" type="submit" data-loading-text="登録中…">Googleカレンダーへ登録</button>
+            </form>
+            {% else %}
+            <span class="small text-muted">期限を設定するとGoogleカレンダーへ登録できます。</span>
+            {% endif %}
+          </div>
+        </div>
+        <div class="checklist-actions">
+          <form method="post" action="{{ url_for('checklists.toggle', item_id=item.id) }}">
+            {{ csrf_field(checklist_action_form, "toggleChecklistCsrf-" ~ item.id) }}
+            <button class="btn btn-sm {{ 'btn-outline-secondary' if item.is_completed else 'btn-outline-success' }}" type="submit">{{ "未完了に戻す" if item.is_completed else "完了にする" }}</button>
+          </form>
+          <a class="btn btn-sm btn-outline-primary" href="{{ url_for('checklists.edit', item_id=item.id) }}">編集</a>
+          <button class="btn btn-sm btn-outline-danger" type="button" data-bs-toggle="modal" data-bs-target="#deleteChecklistModal{{ item.id }}">削除</button>
+        </div>
+      </article>
+      {% if item_calendar_sync %}
+      <div class="modal fade" id="deleteChecklistCalendarModal{{ item.id }}" tabindex="-1" aria-labelledby="deleteChecklistCalendarModalLabel{{ item.id }}" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered"><div class="modal-content">
+          <div class="modal-header"><h3 class="modal-title fs-5" id="deleteChecklistCalendarModalLabel{{ item.id }}">Googleカレンダーのタスク予定を削除しますか？</h3><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="閉じる"></button></div>
+          <div class="modal-body">Googleカレンダー上のタスク予定を削除します。CareerPilot AIのチェックリスト項目は削除されません。</div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">キャンセル</button>
+            <form method="post" action="{{ url_for('checklists.delete_calendar_event', item_id=item.id) }}">{{ csrf_field(calendar_delete_form, "deleteChecklistCalendarCsrf-" ~ item.id) }}<button class="btn btn-danger" type="submit" data-loading-text="削除中…">Googleカレンダーから削除</button></form>
+          </div>
+        </div></div>
+      </div>
+      {% endif %}
+      <div class="modal fade" id="deleteChecklistModal{{ item.id }}" tabindex="-1" aria-labelledby="deleteChecklistModalLabel{{ item.id }}" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered"><div class="modal-content">
+          <div class="modal-header"><h3 class="modal-title fs-5" id="deleteChecklistModalLabel{{ item.id }}">チェック項目を削除しますか？</h3><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="閉じる"></button></div>
+          <div class="modal-body">
+            <p class="mb-0">「{{ item.title }}」は削除後に元へ戻せません。</p>
+            {% if item_calendar_sync %}
+            <div class="alert alert-warning mt-3 mb-0" role="alert">Googleカレンダーへ登録済みの予定は自動削除されません。必要な場合は先にGoogleカレンダー予定を削除してください。</div>
+            {% endif %}
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">キャンセル</button>
+            <form method="post" action="{{ url_for('checklists.delete', item_id=item.id) }}">{{ csrf_field(checklist_action_form, "deleteChecklistCsrf-" ~ item.id) }}<button class="btn btn-danger" type="submit">削除する</button></form>
+          </div>
+        </div></div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+      <div class="empty-state py-4">チェック項目はまだありません。次に行う作業を追加しましょう。</div>
+    {% endif %}
+
+    <div class="checklist-add-panel">
+      <h3 class="form-section-title mb-3">新しい項目を追加</h3>
+      <form method="post" action="{{ url_for('checklists.create', application_id=application.id) }}" novalidate>
+        {{ csrf_field(checklist_form, "addChecklistCsrf") }}
+        <div class="row g-3 align-items-end">
+          <div class="col-lg-6">
+            {{ checklist_form.title.label(class="form-label required") }}
+            {{ checklist_form.title(class="form-control" + (" is-invalid" if checklist_form.title.errors else ""), placeholder="例：一次面接の想定質問を整理する") }}
+            {% for error in checklist_form.title.errors %}<div class="invalid-feedback">{{ error }}</div>{% endfor %}
+          </div>
+          <div class="col-sm-7 col-lg-3">
+            {{ checklist_form.due_at.label(class="form-label") }}
+            {{ checklist_form.due_at(class="form-control" + (" is-invalid" if checklist_form.due_at.errors else "")) }}
+            {% for error in checklist_form.due_at.errors %}<div class="invalid-feedback">{{ error }}</div>{% endfor %}
+          </div>
+          <div class="col-sm-5 col-lg-1">
+            {{ checklist_form.sort_order.label(class="form-label") }}
+            {{ checklist_form.sort_order(class="form-control" + (" is-invalid" if checklist_form.sort_order.errors else "")) }}
+            {% for error in checklist_form.sort_order.errors %}<div class="invalid-feedback">{{ error }}</div>{% endfor %}
+          </div>
+          <div class="col-lg-2 d-grid">
+            <button class="btn btn-primary" type="submit">追加する</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+</section>
+<div class="modal fade" id="deleteModal" tabindex="-1" aria-labelledby="deleteModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered"><div class="modal-content">
+    <div class="modal-header"><h2 class="modal-title fs-5" id="deleteModalLabel">応募先を削除しますか？</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="閉じる"></button></div>
+    <div class="modal-body">
+      <p class="mb-0">「{{ application.company_name }}」の情報は元に戻せません。</p>
+      {% if has_calendar_syncs %}
+      <div class="alert alert-warning mt-3 mb-0" role="alert">
+        Googleカレンダーへ登録済みの予定は自動削除されません。必要な場合は、先に応募先詳細画面からカレンダー予定を削除してください。
+      </div>
+      {% endif %}
+    </div>
+    <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">キャンセル</button><form method="post" action="{{ url_for('applications.delete', application_id=application.id) }}">{{ csrf_field(delete_form, "deleteApplicationCsrf") }}{{ delete_form.submit(class="btn btn-danger", id="deleteApplicationSubmit") }}</form></div>
+  </div></div>
+</div>
+{% endblock %}

@@ -1,0 +1,151 @@
+{% extends "base.html" %}
+{% block title %}外部連携設定 | CareerPilot AI{% endblock %}
+{% block content %}
+{% macro csrf_field(form, field_id) -%}
+  {% if form.csrf_token is defined %}{{ form.csrf_token(id=field_id) }}{% endif %}
+{%- endmacro %}
+<div class="mb-4">
+  <p class="eyebrow mb-1">SETTINGS</p>
+  <h1 class="h2 fw-bold mb-1">外部連携</h1>
+  <p class="text-muted mb-0">CareerPilot AIと外部サービスの接続状態を管理します。</p>
+</div>
+
+{% if google_settings.missing_variables %}
+<div class="alert alert-warning" role="alert">
+  <h2 class="h6 fw-bold">Google OAuthの設定が必要です</h2>
+  <p class="mb-2">次の環境変数を設定するとGoogle連携を開始できます。</p>
+  <code>{{ google_settings.missing_variables | join(", ") }}</code>
+</div>
+{% endif %}
+
+<section class="card integration-card">
+  <div class="card-body p-4 p-lg-5">
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-start gap-3">
+      <div class="d-flex gap-3">
+        <div class="integration-icon" aria-hidden="true">G</div>
+        <div>
+          <h2 class="h4 fw-bold mb-1">Googleカレンダー連携</h2>
+          <p class="text-muted mb-0">面接予定や締切をカレンダーへ登録するための認証設定です。</p>
+        </div>
+      </div>
+      {% if calendar_credential %}
+        <span class="integration-status connected">連携済み</span>
+      {% else %}
+        <span class="integration-status disconnected">未連携</span>
+      {% endif %}
+    </div>
+
+    <hr class="my-4">
+
+    {% if calendar_credential %}
+      <dl class="integration-details">
+        <div>
+          <dt>Googleアカウント</dt>
+          <dd>{{ calendar_credential.google_account_email or "メールアドレス未取得" }}</dd>
+        </div>
+        <div>
+          <dt>トークン有効期限</dt>
+          <dd>{{ calendar_credential.expires_at.strftime("%Y/%m/%d %H:%M") if calendar_credential.expires_at else "未取得" }}</dd>
+        </div>
+      </dl>
+      <button class="btn btn-outline-danger" type="button" data-bs-toggle="modal" data-bs-target="#disconnectGoogleModal">連携を解除する</button>
+    {% elif google_settings.is_configured %}
+      <a class="btn btn-primary" href="{{ url_for('integrations.google_connect') }}" data-loading-text="Googleへ移動中…">Googleと連携する</a>
+    {% else %}
+      <button class="btn btn-primary" type="button" disabled>Googleと連携する</button>
+    {% endif %}
+
+    <div class="integration-note mt-4">
+      <strong>Googleカレンダー用の接続です</strong>
+      <p class="mb-0">面接予定・締切・チェックリスト期限の同期には、この接続だけを使用します。</p>
+    </div>
+  </div>
+</section>
+
+<section class="card integration-card mt-4">
+  <div class="card-body p-4 p-lg-5">
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-start gap-3">
+      <div class="d-flex gap-3">
+        <div class="integration-icon" aria-hidden="true">G</div>
+        <div>
+          <h2 class="h4 fw-bold mb-1">Gmail連携</h2>
+          <p class="text-muted mb-0">就活用メールを扱うための独立したGoogle接続です。</p>
+        </div>
+      </div>
+      {% if gmail_credential %}
+        <span class="integration-status connected">連携済み</span>
+      {% else %}
+        <span class="integration-status disconnected">未連携</span>
+      {% endif %}
+    </div>
+
+    <hr class="my-4">
+
+    {% if gmail_credential %}
+      <dl class="integration-details">
+        <div>
+          <dt>Googleアカウント</dt>
+          <dd>{{ gmail_credential.google_account_email or "メールアドレス未取得" }}</dd>
+        </div>
+        <div>
+          <dt>トークン有効期限</dt>
+          <dd>{{ gmail_credential.expires_at.strftime("%Y/%m/%d %H:%M") if gmail_credential.expires_at else "未取得" }}</dd>
+        </div>
+      </dl>
+      <button class="btn btn-outline-danger" type="button" data-bs-toggle="modal" data-bs-target="#disconnectGmailModal">Gmail連携を解除する</button>
+    {% elif gmail_settings.is_configured %}
+      <a class="btn btn-primary" href="{{ url_for('integrations.google_gmail_connect') }}" data-loading-text="Googleへ移動中…">Gmailと連携する</a>
+    {% else %}
+      <button class="btn btn-primary" type="button" disabled>Gmailと連携する</button>
+      <p class="small text-warning mt-2 mb-0">必要な設定: {{ gmail_settings.missing_variables | join(", ") }}</p>
+    {% endif %}
+
+    <div class="integration-note mt-4">
+      <strong>就活用Googleアカウントを連携してください</strong>
+      <p class="mb-0">Googleカレンダーと別のGoogleアカウントを利用できます。メールの一覧・検索・詳細表示は読み取り専用です。</p>
+    </div>
+  </div>
+</section>
+
+<div class="alert alert-secondary mt-4 small">
+  ローカル開発ではトークンをSQLiteへ保存します。本番環境では暗号化または専用シークレットストアの利用が必要です。
+</div>
+
+{% if calendar_credential %}
+<div class="modal fade" id="disconnectGoogleModal" tabindex="-1" aria-labelledby="disconnectGoogleModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered"><div class="modal-content">
+    <div class="modal-header">
+      <h2 class="modal-title fs-5" id="disconnectGoogleModalLabel">Google連携を解除しますか？</h2>
+      <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="閉じる"></button>
+    </div>
+    <div class="modal-body">保存されているGoogleカレンダー用認証情報をCareerPilot AIから削除します。Gmail用認証情報には影響しません。</div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">キャンセル</button>
+      <form method="post" action="{{ url_for('integrations.google_disconnect') }}" data-loading-text="解除中…">
+        {{ csrf_field(disconnect_form, "disconnectCalendarCsrf") }}
+        {{ disconnect_form.submit(class="btn btn-danger", id="disconnectCalendarSubmit") }}
+      </form>
+    </div>
+  </div></div>
+</div>
+{% endif %}
+
+{% if gmail_credential %}
+<div class="modal fade" id="disconnectGmailModal" tabindex="-1" aria-labelledby="disconnectGmailModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered"><div class="modal-content">
+    <div class="modal-header">
+      <h2 class="modal-title fs-5" id="disconnectGmailModalLabel">Gmail連携を解除しますか？</h2>
+      <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="閉じる"></button>
+    </div>
+    <div class="modal-body">保存されているGmail用認証情報をCareerPilot AIから削除します。Googleカレンダー連携と同期情報には影響しません。</div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">キャンセル</button>
+      <form id="disconnectGmailForm" method="post" action="{{ url_for('integrations.google_gmail_disconnect') }}" data-loading-text="解除中…">
+        {{ csrf_field(gmail_disconnect_form, "disconnectGmailCsrf") }}
+        {{ gmail_disconnect_form.submit(class="btn btn-danger", id="disconnectGmailSubmit") }}
+      </form>
+    </div>
+  </div></div>
+</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+{% block title %}AI解析結果からチェックリストを作成 | CareerPilot AI{% endblock %}
+{% block content %}
+{% macro field_errors(field) %}
+  {% for error in field.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+{% endmacro %}
+
+<div class="ai-checklist-apply">
+  <div class="mb-4">
+    <a class="text-decoration-none small" href="{{ cancel_url }}">← メール詳細へ戻る</a>
+    <p class="eyebrow mt-3 mb-1">AI CHECKLIST REVIEW</p>
+    <h1 class="h2 fw-bold mb-2">AI解析結果からチェックリストを作成</h1>
+    <p class="text-muted mb-0">AIが抽出した必要な対応です。登録先と各項目を確認し、不要な項目はチェックを外してください。</p>
+  </div>
+
+  <div class="alert alert-info" role="note">
+    保存するまでチェック項目は作成されません。期限候補が正しいか、元メールも確認してください。
+  </div>
+
+  <section class="card mb-4" aria-labelledby="checklistApplicationHeading">
+    <div class="card-body p-4">
+      <h2 class="h5 fw-bold" id="checklistApplicationHeading">登録先の応募先</h2>
+      <p class="small text-muted">会社名と職種を確認して、チェック項目を追加する応募先を選択してください。</p>
+      {% if application_choices|length > 1 %}
+        <form method="get" action="{{ url_for('emails.apply_analysis_checklist', message_id=message_id) }}" class="row g-2 align-items-end">
+          <input type="hidden" name="token" value="{{ form.token.data }}">
+          <input type="hidden" name="return_to" value="{{ return_to }}">
+          <div class="col-lg-9">
+            <label class="form-label" for="checklist-application-select">応募先</label>
+            <select class="form-select" id="checklist-application-select" name="application_id" required>
+              {% for application_id, label in application_choices %}
+                <option value="{{ application_id }}"{% if selected_application and selected_application.id == application_id %} selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-lg-3 d-grid">
+            <button class="btn btn-outline-primary" type="submit">この応募先を選択</button>
+          </div>
+        </form>
+      {% else %}
+        <div class="alert alert-warning mb-0">登録先となる応募先がありません。先に応募先を登録してください。</div>
+      {% endif %}
+      {% if selected_application %}
+        <div class="selected-checklist-application mt-3">
+          <span class="fw-semibold">選択中：</span>{{ selected_application.company_name }}{% if selected_application.position_name %}（{{ selected_application.position_name }}）{% endif %}
+        </div>
+      {% endif %}
+    </div>
+  </section>
+
+  <form method="post" novalidate data-loading-text="追加中…">
+    {{ form.csrf_token }}
+    {{ form.token }}
+    {{ form.return_to }}
+    <div class="visually-hidden" aria-hidden="true">{{ form.application_id }}</div>
+    {{ field_errors(form.application_id) }}
+
+    <div class="row g-4">
+      <div class="col-xl-8">
+        <section class="card mb-4" aria-labelledby="checklistCandidatesHeading">
+          <div class="card-body p-4">
+            <h2 class="form-section-title" id="checklistCandidatesHeading">追加候補</h2>
+            {% for error in form.candidates.errors %}
+              {% if error is string %}<div class="alert alert-warning">{{ error }}</div>{% endif %}
+            {% endfor %}
+
+            {% if form.candidates.entries %}
+              <div class="ai-checklist-candidates">
+                {% for candidate in form.candidates %}
+                  <article class="ai-checklist-candidate">
+                    <div class="form-check mb-3">
+                      {{ candidate.selected(class="form-check-input") }}
+                      {{ candidate.selected.label(class="form-check-label fw-bold") }}
+                    </div>
+                    <div class="row g-3">
+                      <div class="col-md-7">
+                        {{ candidate.title.label(class="form-label") }}
+                        {{ candidate.title(class="form-control" + (" is-invalid" if candidate.title.errors else "")) }}
+                        {{ field_errors(candidate.title) }}
+                      </div>
+                      <div class="col-md-5">
+                        {{ candidate.due_at.label(class="form-label") }}
+                        {{ candidate.due_at(class="form-control" + (" is-invalid" if candidate.due_at.errors else "")) }}
+                        {{ field_errors(candidate.due_at) }}
+                        <div class="form-text">ES提出・Webテスト受験だけ、安全に対応できるAI日時を候補表示します。</div>
+                      </div>
+                    </div>
+                    {% if duplicate_flags[loop.index0] %}
+                      <div class="alert alert-warning py-2 mt-3 mb-0 existing-task-warning" role="alert">
+                        既存タスクあり：「{{ candidate.title.data }}」は未完了タスクとして登録済みです。確認後も追加できます。
+                      </div>
+                    {% endif %}
+                  </article>
+                {% endfor %}
+              </div>
+            {% else %}
+              <div class="alert alert-warning mb-0">AIが検出した必要な対応はありません。</div>
+            {% endif %}
+          </div>
+        </section>
+      </div>
+
+      <aside class="col-xl-4">
+        <section class="card ai-checklist-reference mb-4" aria-labelledby="checklistReferenceHeading">
+          <div class="card-body p-4">
+            <h2 class="h5 fw-bold" id="checklistReferenceHeading">AI参考情報</h2>
+            <dl>
+              <div><dt>会社名</dt><dd>{{ ai_result.company_name or "不明" }}</dd></div>
+              <div><dt>信頼度</dt><dd>{{ ai_result.confidence_label }}</dd></div>
+            </dl>
+
+            <h3 class="h6 fw-bold mt-4">重要事項</h3>
+            {% if ai_result.important_notes %}
+              <ul class="ps-3">{% for item in ai_result.important_notes %}<li>{{ item }}</li>{% endfor %}</ul>
+            {% else %}<p class="text-muted">なし</p>{% endif %}
+
+            <h3 class="h6 fw-bold mt-4">原文の根拠</h3>
+            {% if ai_result.evidence_items %}
+              <dl class="ai-checklist-evidence mb-0">
+                {% for label, evidence in ai_result.evidence_items %}
+                  <div><dt>{{ label }}</dt><dd>{{ evidence }}</dd></div>
+                {% endfor %}
+              </dl>
+            {% else %}<p class="text-muted mb-0">なし</p>{% endif %}
+          </div>
+        </section>
+      </aside>
+    </div>
+
+    <div class="d-flex flex-column-reverse flex-sm-row justify-content-end gap-2">
+      <a class="btn btn-outline-secondary" href="{{ cancel_url }}">キャンセル</a>
+      {{ form.submit(class="btn btn-primary px-4") }}
+    </div>
+  </form>
+</div>
+{% endblock %}

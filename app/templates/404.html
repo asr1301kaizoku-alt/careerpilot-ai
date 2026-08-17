@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}ページが見つかりません | CareerPilot AI{% endblock %}
+{% block content %}
+<div class="error-page">
+  <div class="error-code">404</div>
+  <h1 class="h3 fw-bold">ページが見つかりません</h1>
+  <p class="text-muted">URLが正しいか確認するか、ダッシュボードに戻ってください。</p>
+  <a class="btn btn-primary" href="{{ url_for('main.dashboard') }}">ダッシュボードへ戻る</a>
+</div>
+{% endblock %}
